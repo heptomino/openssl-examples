@@ -1,3 +1,10 @@
+// compilation: g++ main.cpp -o ssl_example -lssl -lcrypto
+// This code demonstrates how to configure OpenSSL to use the system's default truststore
+// on different platforms (Linux, macOS, Windows) using C++17.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <iostream>
@@ -9,15 +16,27 @@
 #include <Security/Security.h>
 #endif
 
-void init_openssl()
+#define BufferSize 4096
+
+void report_error(const char* msg)
 {
-    SSL_load_error_strings();
-    OpenSSL_add_ssl_algorithms();
+    std::cerr << msg << std::endl;
+    ERR_print_errors_fp(stderr);
+    exit(EXIT_FAILURE);
 }
 
-void cleanup_openssl()
+void init_openssl()
 {
-    EVP_cleanup();
+    OPENSSL_init_ssl(0, NULL);
+}
+
+void cleanup_openssl(SSL_CTX* ctx, BIO* bio)
+{
+    // EVP_cleanup();
+    SSL_CTX_free(ctx);
+    BIO_free_all(bio);
+    // 全局清理（在程序退出时调用一次）
+    OPENSSL_cleanup();
 }
 
 SSL_CTX* create_context()
@@ -28,70 +47,110 @@ SSL_CTX* create_context()
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
+    /* 强制最低 TLS1.2，禁用不安全算法 */
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+    SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION);
     return ctx;
 }
 
 void configure_truststore(SSL_CTX* ctx)
 {
 #if defined(__linux__)
-    // Linux: 使用系统 CA 路径
     if (!SSL_CTX_load_verify_locations(ctx,
-        "/etc/ssl/certs/ca-certificates.crt",  // Debian/Ubuntu
+        "/etc/ssl/certs/ca-certificates.crt",
         "/etc/ssl/certs")) {
-        // 也可尝试 RHEL/CentOS 的路径: /etc/pki/tls/certs/ca-bundle.crt
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
-    }
-
-#elif defined(__APPLE__)
-    // macOS: 使用系统 Keychain
-    // OpenSSL 本身不会自动读取 Keychain，需要应用层导入
-    // 简化方式：使用 SecureTransport 或手动导出 CA 到 PEM 再加载
-    // 这里给出一个常见做法：加载 Homebrew 安装的 OpenSSL truststore
-    if (!SSL_CTX_load_verify_locations(ctx,
-        "/opt/homebrew/etc/openssl@3/cert.pem", nullptr)) {
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
-    }
-
-#elif defined(_WIN32)
-    // Windows: 使用系统证书存储
-    HCERTSTORE hStore = CertOpenSystemStore(0, "ROOT");
-    if (!hStore) {
-        std::cerr << "Failed to open Windows ROOT store\n";
-        exit(EXIT_FAILURE);
-    }
-
-    PCCERT_CONTEXT pContext = nullptr;
-    while ((pContext = CertEnumCertificatesInStore(hStore, pContext)) != nullptr) {
-        const unsigned char* encoded = pContext->pbCertEncoded;
-        X509* x509 = d2i_X509(NULL, &encoded, pContext->cbCertEncoded);
-        if (x509) {
-            X509_STORE* store = SSL_CTX_get_cert_store(ctx);
-            X509_STORE_add_cert(store, x509);
-            X509_free(x509);
+        /* 回退到默认路径（如果可用） */
+        if (!SSL_CTX_set_default_verify_paths(ctx)) {
+            ERR_print_errors_fp(stderr);
+            exit(EXIT_FAILURE);
         }
     }
-    CertCloseStore(hStore, 0);
-
-#else
-    #error "Unsupported platform"
+#elif defined(__APPLE__)
+    if (!SSL_CTX_load_verify_locations(ctx,
+        "/opt/homebrew/etc/openssl@3/cert.pem", nullptr)) {
+        if (!SSL_CTX_set_default_verify_paths(ctx)) {
+            ERR_print_errors_fp(stderr);
+            exit(EXIT_FAILURE);
+        }
+    }
 #endif
-
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 }
 
-int main()
+void secure_connect(const char* hostname)
 {
-    init_openssl();
+    char name[BufferSize];
+    char request[BufferSize];
+    char response[BufferSize];
+
     SSL_CTX* ctx = create_context();
 
-    configure_truststore(ctx);
+    configure_truststore(ctx); // <-- 已移到这里
 
-    // 这里可以添加更多的 SSL/TLS 配置，例如设置证书、私钥等
+    BIO* bio = BIO_new_ssl_connect(ctx);
+    if (!bio) {
+        report_error("Failed to create BIO");
+    }
 
-    // 清理
-    SSL_CTX_free(ctx);
-    cleanup_openssl();
+    SSL* ssl = nullptr;
+
+    /* link bio channel, SSL session, and server endpoint */
+    snprintf(name, sizeof(name), "%s:%s", hostname, "https");
+    BIO_get_ssl(bio, &ssl);
+    if (!ssl) {
+        cleanup_openssl(ctx, bio);
+        report_error("Failed to get SSL from BIO");
+    }
+    /* 设置 SNI 和主机名验证（在握手前） */
+    SSL_set_tlsext_host_name(ssl, hostname);
+    if (!SSL_set1_host(ssl, hostname)) {
+        cleanup_openssl(ctx, bio);
+        report_error("Failed to set expected host name");
+    }
+    SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+    BIO_set_conn_hostname(bio, name);
+
+    /* attempt to connect */
+    if (BIO_do_connect(bio) <= 0) {
+        cleanup_openssl(ctx, bio);
+        report_error("Failed to connect");
+    }
+
+    /* verify the certificate */
+    long verify_flag = SSL_get_verify_result(ssl);
+    if (verify_flag != X509_V_OK) {
+        std::cerr << "Certificate verification failed: " << verify_flag << "\n";
+        cleanup_openssl(ctx, bio);
+        return;
+    }
+
+    /* 发送 HTTPS 请求 */
+    snprintf(request, sizeof(request),
+             "GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
+             hostname);
+    BIO_write(bio, request, strlen(request));
+
+    /* 读取响应 */
+    int len = 0;
+    while ((len = BIO_read(bio, response, sizeof(response))) > 0) {
+        std::cout.write(response, len);
+    }
+
+    cleanup_openssl(ctx, bio);
+}
+
+int main(int argc, char** argv)
+{
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <hostname>\n";
+        return EXIT_FAILURE;
+    }
+
+    init_openssl();
+
+    const char* hostname = argv[1];
+    std::cout << "Connecting to " << hostname << "...\n";
+    secure_connect(hostname);
+
     return 0;
 }
