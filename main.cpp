@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <array>
 #include <memory>
 #include <stdexcept>
 #include <openssl/ssl.h>
@@ -38,12 +39,12 @@ using unique_BIO = std::unique_ptr<BIO, BIO_deleter>;
 class OpenSSLException : public std::runtime_error {
 public:
     explicit OpenSSLException(const std::string& msg) : std::runtime_error(msg) {
-        char err_buf[256];
+        std::array <char, 256> err_buf;
         unsigned long err_code;
         std::string err_string = msg + "\nOpenSSL Errors:\n";
         while ((err_code = ERR_get_error()) != 0) {
-            ERR_error_string_n(err_code, err_buf, sizeof(err_buf));
-            err_string += std::string(err_buf) + "\n";
+            ERR_error_string_n(err_code, err_buf.data(), err_buf.size());
+            err_string += std::string(err_buf.data()) + "\n";
         }
         // 重置错误状态以防影响其他操作
         ERR_clear_error();
@@ -56,7 +57,7 @@ public:
 // --- OpenSSL Initialization and Global Cleanup ---
 
 void init_openssl() {
-    OPENSSL_init_ssl(0, NULL);
+    OPENSSL_init_ssl(0, nullptr);
 }
 
 void cleanup_openssl() {
@@ -85,14 +86,14 @@ unique_SSL_CTX create_context() {
     return ctx;
 }
 
-void configure_truststore(SSL_CTX* ctx) {
+void configure_truststore(const unique_SSL_CTX& ctx) {
 #if defined(_WIN32)
     HCERTSTORE hStore = CertOpenSystemStore(0, "ROOT");
     if (!hStore) {
         throw OpenSSLException("Failed to open Windows root certificate store");
     }
 
-    X509_STORE* store = SSL_CTX_get_cert_store(ctx);
+    X509_STORE* store = SSL_CTX_get_cert_store(ctx.get());
     PCCERT_CONTEXT pContext = nullptr;
 
     while ((pContext = CertEnumCertificatesInStore(hStore, pContext)) != nullptr) {
@@ -108,20 +109,20 @@ void configure_truststore(SSL_CTX* ctx) {
 
 #else // For Linux, macOS, and other Unix-like systems
     // SSL_CTX_set_default_verify_paths is the most portable way
-    if (!SSL_CTX_set_default_verify_paths(ctx)) {
+    if (!SSL_CTX_set_default_verify_paths(ctx.get())) {
         throw OpenSSLException("Failed to load default system trust store");
     }
 #endif
     
     // 启用证书验证
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
+    SSL_CTX_set_verify(ctx.get(), SSL_VERIFY_PEER, nullptr);
 }
 
 // --- Main Connection Logic ---
 
 void secure_connect(const std::string& hostname) {
     unique_SSL_CTX ctx = create_context();
-    configure_truststore(ctx.get());
+    configure_truststore(ctx);
 
     unique_BIO bio(BIO_new_ssl_connect(ctx.get()));
     if (!bio) {
