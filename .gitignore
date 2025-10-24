@@ -39,3 +39,17 @@
 
 # debug information files
 *.dwo
+
+# Log files
+*.log
+
+# Ignore compiled binaries in examples/ but keep source files
+/examples/*
+!/examples/*.cpp
+!/examples/*.h
+
+# Common generated executables (local build outputs)
+ssl_example
+ssl_server
+client.out
+server.out
