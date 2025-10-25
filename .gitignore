@@ -1,3 +1,42 @@
+# Build outputs
+/bin/
+/build/
+/*.o
+/*.out
+
+# Examples binaries
+examples/server
+examples/ssl_server
+
+# Logs and runtime files
+/logs/
+/logs/*
+*.log
+*.pid
+server.log
+server.out
+
+# Local certs (do NOT commit private keys)
+/certs/*.pem
+/certs/*.key
+/certs/*.crt
+
+# Tools and temp files
+/tools/*.pid
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+.env
+.cache/
 # Prerequisites
 *.d
 
@@ -56,3 +95,7 @@ server.out
 
 # Certificate files and private keys
 *.pem
+
+# Ignore runtime sample outputs
+headers.txt
+out.txt
