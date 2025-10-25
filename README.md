@@ -3,28 +3,32 @@
 一组面向教学的示例，展示如何在现代 C++ 中安全且可维护地使用 OpenSSL（RAII、异常、BIO/SSL API 的正确用法）。
 
 目录结构（重要文件）
-- `main.cpp` — 最佳实践（一）：TLS 客户端示例
-- `server.cpp` — 最佳实践（二）：TLS 服务器示例（监听 4433）
+- `examples/client.cpp` — 最佳实践（一）：TLS 客户端示例
+- `examples/server.cpp` — 最佳实践（二）：TLS 服务器示例（监听 4433）
 - `notes/` — 存放每篇文章的草稿与最终文档（文章应包含完整的代码示例）
 - `examples/` — （推荐）存放从文章抽取并可编译的源代码示例（如果不存在，可创建）
 
 快速开始
 
-1. 编译客户端：
+1. 编译客户端（在 `examples/` 下）：
 
 ```bash
-g++ main.cpp -o ssl_example -lssl -lcrypto
+g++ examples/client.cpp -o ssl_example -lssl -lcrypto
 ```
 
-2. 编译服务器：
+2. 编译服务器（在 `examples/` 下）：
 
 ```bash
-g++ server.cpp -o ssl_server -lssl -lcrypto
+g++ examples/server.cpp -o ssl_server -lssl -lcrypto
 ```
 
-3. 运行服务器（确保 `cert.pem` 与 `key.pem` 在当前目录）：
+3. 运行服务器（确保 `cert.pem` 与 `key.pem` 在当前目录）。如果尚未生成自签名证书，可使用下列命令生成开发用证书：
 
 ```bash
+# 生成自签名证书（开发/测试用）
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 365 -nodes -subj "/CN=localhost"
+
+# 然后运行服务器
 ./ssl_server
 ```
 

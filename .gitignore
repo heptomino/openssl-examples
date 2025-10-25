@@ -53,3 +53,6 @@ ssl_example
 ssl_server
 client.out
 server.out
+
+# Certificate files and private keys
+*.pem

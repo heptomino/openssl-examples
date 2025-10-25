@@ -2,13 +2,13 @@
 帮助自动化编码代理（Copilot / AI agents）快速上手本仓库：理解项目目的、关键文件、构建/运行步骤、以及特有的编码约定与调试技巧。
 
 ## 大体架构（为何这样组织）
-- 本仓库包含两个示例程序：一个 TLS 客户端（`main.cpp`）和一个 TLS 服务器示例（`server.cpp`，示例/文章在 `C++ OpenSSL 最佳实践（二）...md` 中）。
+- 本仓库包含两个示例程序：一个 TLS 客户端（`examples/client.cpp`）和一个 TLS 服务器示例（`examples/server.cpp`，示例/文章在 `C++ OpenSSL 最佳实践（二）...md` 中）。
 - 设计目标：使用现代 C++（RAII + exceptions）封装 OpenSSL，简化资源管理并避免裸指针/手动释放。
-- 通信模型：客户端使用 `BIO_new_ssl_connect`（在 `main.cpp`），服务器使用 `BIO_new_accept` + 为每连接构建 `SSL BIO -> socket BIO` 链（参见文章 md 中的 `BIO_push` / `BIO_do_handshake` 示例）。
+- 通信模型：客户端使用 `BIO_new_ssl_connect`（在 `examples/client.cpp`），服务器使用 `BIO_new_accept` + 为每连接构建 `SSL BIO -> socket BIO` 链（参见文章 md 中的 `BIO_push` / `BIO_do_handshake` 示例）。
 
 ## 关键文件一览
-- `main.cpp` — TLS 客户端示例，展示如何加载系统信任库（`SSL_CTX_set_default_verify_paths` / Windows 使用 CertOpenSystemStore）、SNI 设置、主机名验证以及 `BIO_new_ssl_connect` 使用。
-- `server.cpp` — TLS 服务器（文章同时给出完整示例），监听 `4433`，加载 `cert.pem`/`key.pem`，为每个接入连接构建 SSL BIO 链并执行握手。
+ - `examples/client.cpp` — TLS 客户端示例，展示如何加载系统信任库（`SSL_CTX_set_default_verify_paths` / Windows 使用 CertOpenSystemStore）、SNI 设置、主机名验证以及 `BIO_new_ssl_connect` 使用。
+ - `examples/server.cpp` — TLS 服务器（文章同时给出完整示例），监听 `4433`，加载 `cert.pem`/`key.pem`，为每个接入连接构建 SSL BIO 链并执行握手。
 - `cert.pem`, `key.pem` — 自签名证书/私钥（开发测试），必须与可执行文件同目录或在 server 运行前指定正确路径。
 - `C++ OpenSSL 最佳实践（二）...md` — 设计说明与逐行解释（重要的行为和修正被记录在这里，可作为实现依据）。
 
@@ -27,7 +27,7 @@
 - 错误处理：本项目通过抛出 `OpenSSLException`（继承自 `std::runtime_error`）来传播 OpenSSL 层的错误，并在构造器中打印由 `ERR_get_error()` 收集的详情。修改行为时保持异常语义一致。
 - 资源管理：使用自定义删除器和 `std::unique_ptr` 封装 OpenSSL 资源（例如 `unique_SSL_CTX`, `unique_BIO`）。不要替换为裸指针释放；请保留 RAII 风格。
 - BIO 链约定（关键）：服务器端流程为 `accept BIO` -> `BIO_do_accept` -> `BIO_pop`（得到 socket BIO）-> `BIO_new_ssl(ctx, 0)`（server-mode）-> `BIO_push(ssl_bio, socket_bio)` -> `BIO_do_handshake(chain_head)` -> `BIO_read/write(chain_head)`。这段逻辑在文章 md 中有完整示例，是实现时必须遵守的顺序。
-- 网络端口：示例服务器使用 `4433`（非默认 `443`），客户端 `main.cpp` 默认连接 `:443` —— 如果用客户端测试本地服务器，请把 `host_with_port` 改为 `hostname + ":4433"`（文章中有示例说明）。
+- 网络端口：示例服务器使用 `4433`（非默认 `443`），客户端 `examples/client.cpp` 默认连接 `:443` —— 如果用客户端测试本地服务器，请把 `host_with_port` 改为 `hostname + ":4433"`（文章中有示例说明）。
 
 ## 平台与集成要点
 - Windows 特殊处理：`main.cpp` 和示例中包含 Windows 证书导入（`CertOpenSystemStore`）和 Winsock 初始化（`WSAStartup`/`WSACleanup`）；修改或在 CI 中使用这些代码时请考虑条件编译宏 `#if defined(_WIN32)`。

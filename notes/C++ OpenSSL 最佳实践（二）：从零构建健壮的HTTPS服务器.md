@@ -26,8 +26,8 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 3
 
 ```cpp
 // 编译命令:
-// Linux/macOS: g++ server.cpp -o ssl_server -lssl -lcrypto
-// Windows (MSVC): cl server.cpp /I"C:\path\to\openssl\include" /link /libpath:"C:\path\to\openssl\lib" libssl.lib libcrypto.lib crypt32.lib ws2_32.lib
+// Linux/macOS: g++ examples/server.cpp -o ssl_server -lssl -lcrypto
+// Windows (MSVC): cl examples\server.cpp /I"C:\path\to\openssl\include" /link /libpath:"C:\path\to\openssl\lib" libssl.lib libcrypto.lib crypt32.lib ws2_32.lib
 //
 // 运行前，请确保 cert.pem 和 key.pem 文件与可执行文件在同一目录下。
 //
@@ -122,7 +122,7 @@ unique_SSL_CTX create_server_context() {
     }
 
     // 加载服务器私钥
-    if (SSL_CTX_use_privatekey_file(ctx.get(), "key.pem", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_PrivateKey_file(ctx.get(), "key.pem", SSL_FILETYPE_PEM) <= 0) {
         throw OpenSSLException("Failed to load private key file");
     }
 

@@ -9,8 +9,8 @@
 
 ```cpp
 // 编译命令:
-// Linux/macOS: g++ main.cpp -o ssl_example -lssl -lcrypto
-// Windows (MSVC): cl main.cpp /I"C:\path\to\openssl\include" /link /libpath:"C:\path\to\openssl\lib" libssl.lib libcrypto.lib crypt32.lib ws2_32.lib
+// Linux/macOS: g++ examples/client.cpp -o ssl_example -lssl -lcrypto
+// Windows (MSVC): cl examples\client.cpp /I"C:\path\to\openssl\include" /link /libpath:"C:\path\to\openssl\lib" libssl.lib libcrypto.lib crypt32.lib ws2_32.lib
 //
 // 本代码演示了如何配置OpenSSL以使用系统的默认信任库。
 // 它通过现代C++实践（RAII、异常处理）进行了增强，并支持Linux、macOS和Windows。
