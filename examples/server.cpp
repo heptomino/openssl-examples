@@ -197,7 +197,7 @@ void run_server(const unique_SSL_CTX& ctx) {
         BIO_push(ssl_filter_bio, client_socket_bio);
 
         // 3. 使用 unique_BIO 管理整个BIO链的生命周期
-    unique_BIO client_chain_bio(ssl_filter_bio);
+        unique_BIO client_chain_bio(ssl_filter_bio);
 
         // 4. 在链的头部执行TLS握手 (相当于 SSL_accept)
         // 在非阻塞 BIO 上循环执行握手，直到成功或出现不可恢复错误
