@@ -12,12 +12,18 @@ NOTES_DIR="${1:-$WORKDIR/notes}"
 OUT_DIR="${2:-$WORKDIR/examples}"
 COMPILE="${3:-1}"
 
+# Keep compiler settings consistent with the Makefile; allow callers to override via env.
+CXX="${CXX:-g++}"
+CXXFLAGS="${CXXFLAGS:--std=c++17 -O2 -Wall -Wextra}"
+LDFLAGS="${LDFLAGS:--lssl -lcrypto}"
+
 mkdir -p "$OUT_DIR"
 shopt -s nullglob
 
 echo "Notes dir: $NOTES_DIR"
 echo "Out dir: $OUT_DIR"
 echo "Compile: $COMPILE"
+echo "Compiler: $CXX $CXXFLAGS $LDFLAGS"
 
 echo "Scanning Markdown files..."
 
@@ -72,7 +78,7 @@ for md in "$NOTES_DIR"/*.md; do
     bin_name="$(dirname "$out")/$(basename "$out" .cpp)"
     build_log="${bin_name}.build.log"
     echo "[build] Compiling $out -> $bin_name"
-    if g++ "$out" -o "$bin_name" -lssl -lcrypto 2>"$build_log"; then
+    if "$CXX" $CXXFLAGS "$out" -o "$bin_name" $LDFLAGS 2>"$build_log"; then
       echo "[ok] Compiled $bin_name"
     else
       echo "[fail] Compile failed for $out. See $build_log"

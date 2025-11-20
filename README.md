@@ -65,6 +65,33 @@ git commit -m "Remove local certs from index; keep them locally and add to .giti
 - 保持 RAII + 异常风格（使用 `unique_*` typedefs 和自定义删除器）。
 - 对 BIO 链或握手流程的任何修正，应在代码注释和对应 `notes/` 文档中说明原因。
 
+### 构建与运行所有示例
+
+1. 构建所有示例：
+
+```bash
+make
+```
+
+这会自动扫描 `examples/` 目录下的所有 `.cpp` 文件，并为每个文件生成一个独立的可执行文件，存放在 `bin/` 目录中。
+
+2. 清理所有生成的二进制文件和日志：
+
+```bash
+make clean
+```
+
+3. 重新构建所有示例：
+
+```bash
+make rebuild
+```
+
+### 注意事项
+- 每个示例文件必须包含 `main()` 函数，否则会导致链接错误。
+- 所有生成的二进制文件会与源文件同名。例如，`examples/client.cpp` 会生成 `bin/client`。
+- 如果需要添加新的示例，只需将 `.cpp` 文件放入 `examples/` 目录并重新运行 `make`。
+
 许可证
 
 本仓库示例用于教学目的，请在实际生产使用前进行安全审计并替换示例证书。
