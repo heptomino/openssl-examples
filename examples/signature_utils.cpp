@@ -11,6 +11,7 @@
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/ec.h>
+#include <openssl/core_names.h>
 
 // --- 基础类型与 RAII ---
 
@@ -48,44 +49,25 @@ public:
      */
     static unique_EVP_PKEY generate_key(KeyType type) {
         unique_EVP_PKEY pkey(nullptr);
-        EVP_PKEY_CTX* ctx = nullptr; // 不需要手动释放，由 EVP_PKEY_new_... 管理或栈分配不适用
 
         if (type == KeyType::RSA) {
-            // 生成 2048 位 RSA 密钥
-            EVP_PKEY* p = EVP_PKEY_new(); // 创建空对象
-            if (!p) throw CryptoException("Failed to create EVP_PKEY");
+            int bits = 2048;
+            OSSL_PARAM params[] = {
+                OSSL_PARAM_construct_int(OSSL_PKEY_PARAM_BITS, &bits),
+                OSSL_PARAM_END
+            };
+            EVP_PKEY* p = EVP_PKEY_Q_keygen(nullptr, nullptr, "RSA", params);
+            if (!p) throw CryptoException("EVP_PKEY_Q_keygen(RSA) failed");
             pkey.reset(p);
-            
-            // 旧式生成方法已弃用，使用 EVP_PKEY_Q_keygen (OpenSSL 3.0+) 或 EVP_RSA_gen (OpenSSL 1.1+)
-            // 这里为了演示通用性，展示更底层的 PKEY_CTX 流程：
-            EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
-            if (!kctx) throw CryptoException("EVP_PKEY_CTX_new_id failed");
-            
-            if (EVP_PKEY_keygen_init(kctx) <= 0 ||
-                EVP_PKEY_CTX_set_rsa_keygen_bits(kctx, 2048) <= 0 ||
-                EVP_PKEY_keygen(kctx, &p) <= 0) {
-                EVP_PKEY_CTX_free(kctx);
-                throw CryptoException("RSA Key generation failed");
-            }
-            EVP_PKEY_CTX_free(kctx);
-            // 注意：EVP_PKEY_keygen 将生成的密钥赋值给了 p，我们需要重置智能指针接管它
-            pkey.release(); // 释放旧的空指针所有权
-            pkey.reset(p);  // 接管新的
-            
-        } else {
-            // 生成 ECC 密钥 (使用 prime256v1 / NIST P-256 曲线)
-            // 这是一个现代且高效的选择
-            EVP_PKEY* p = nullptr;
-            EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
-            if (!kctx) throw CryptoException("EVP_PKEY_CTX_new_id failed");
 
-            if (EVP_PKEY_keygen_init(kctx) <= 0 ||
-                EVP_PKEY_CTX_set_ec_paramgen_curve_nid(kctx, NID_X9_62_prime256v1) <= 0 ||
-                EVP_PKEY_keygen(kctx, &p) <= 0) {
-                EVP_PKEY_CTX_free(kctx);
-                throw CryptoException("ECC Key generation failed");
-            }
-            EVP_PKEY_CTX_free(kctx);
+        } else {
+            char group_name[] = "prime256v1"; // NIST P-256
+            OSSL_PARAM params[] = {
+                OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, group_name, 0),
+                OSSL_PARAM_END
+            };
+            EVP_PKEY* p = EVP_PKEY_Q_keygen(nullptr, nullptr, "EC", params);
+            if (!p) throw CryptoException("EVP_PKEY_Q_keygen(EC) failed");
             pkey.reset(p);
         }
         return pkey;
